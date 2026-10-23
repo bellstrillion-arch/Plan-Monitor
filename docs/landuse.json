@@ -1,0 +1,10 @@
+{"residential":{"class":"buildable","en":"Residential","am":"መኖሪያ","color":"#f2d16b"},
+ "mixed_use":{"class":"buildable","en":"Mixed use","am":"ድብልቅ አገልግሎት","color":"#f0a35e"},
+ "commercial":{"class":"buildable","en":"Commercial","am":"ንግድ","color":"#e0703a"},
+ "industrial":{"class":"buildable","en":"Industrial","am":"ኢንዱስትሪ","color":"#8c6bb1"},
+ "institutional":{"class":"buildable","en":"Institutional / public service","am":"የመንግሥት/ማኅበራዊ አገልግሎት","color":"#4a7fd4"},
+ "green_open_space":{"class":"restricted","en":"Green & open space","am":"አረንጓዴ እና ክፍት ቦታ","color":"#2e9e4f"},
+ "road_transport":{"class":"restricted","en":"Road & transport (incl. parking)","am":"መንገድ እና ትራንስፖርት","color":"#888888"},
+ "water_riparian":{"class":"restricted","en":"River / water buffer","am":"ወንዝ እና ውሃ ዳር","color":"#3fb6d8"},
+ "reserved":{"class":"restricted","en":"Reserved / no-build","am":"የተከለለ ቦታ","color":"#a0522d"},
+ "outside_plan":{"class":"outside_plan","en":"Outside plan boundary","am":"ከፕላን ወሰን ውጭ","color":"#d62728"}}

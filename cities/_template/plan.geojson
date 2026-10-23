@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"land_use": "green_open_space", "name": "example park"}, "geometry": {"type": "Polygon", "coordinates": [[[37.74, 10.38], [37.741, 10.38], [37.741, 10.381], [37.74, 10.381], [37.74, 10.38]]]}}]}

@@ -1,0 +1,53 @@
+<!doctype html><html lang="am"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Off-plan construction monitor</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>body{margin:0;font:14px system-ui,sans-serif;display:flex;height:100vh}#side{width:340px;padding:10px;overflow:auto;box-sizing:border-box;border-right:1px solid #ccc}#map{flex:1}
+label{display:block;margin:6px 0}.it{padding:4px;border-bottom:1px solid #eee;cursor:pointer}.it:hover{background:#eef}button{margin:2px}
+@media(max-width:700px){body{flex-direction:column}#side{width:auto;height:45vh;border:0}}</style>
+<div id="side"><h3 id="title"></h3><div id="demo" hidden style="background:#fdd;padding:6px">DEMO — synthetic data, not real detections</div>
+<label>City <select id="city"></select></label>
+<label>ከቀን / Start date <input type="date" id="start"></label><input type="range" id="slider" style="width:100%">
+<div><button data-d="30">30d</button><button data-d="90">90d</button><button data-d="180">180d</button><button data-d="365">1y</button><button data-d="0">All</button></div>
+<label>Type <select id="type"><option value="">All</option><option>violation_candidate</option><option>activity</option></select></label>
+<label><input type="checkbox" id="sat" checked> Satellite basemap</label>
+<div id="legend" style="font-size:12px"></div><div id="sum"></div><div id="detail"></div><div id="list"></div><button id="exp">Export reviews (CSV)</button></div><div id="map"></div>
+<script>
+const $=id=>document.getElementById(id),DAY=864e5;let A=[],meta,cityId,map,rev={},bound=0,LU={};const lab=k=>LU[k]?LU[k].am+' / '+LU[k].en:k;
+const J=async u=>(await fetch(u)).json(),iso=d=>d.toISOString().slice(0,10),addD=(s,n)=>iso(new Date(+new Date(s)+n*DAY));
+(async()=>{LU=await J('landuse.json');const cs=await J('data/cities.json');$('city').innerHTML=cs.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+$('city').onchange=load;map=new maplibregl.Map({container:'map',center:[37.74,10.38],zoom:14,style:{version:8,sources:{
+osm:{type:'raster',tiles:['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],tileSize:256,attribution:'© OpenStreetMap'},
+sat:{type:'raster',tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],tileSize:256,attribution:'Esri, Maxar, Earthstar Geographics'}},
+layers:[{id:'osm',type:'raster',source:'osm'},{id:'sat',type:'raster',source:'sat'}]}});map.on('load',load)})();
+$('sat').onchange=()=>map.setLayoutProperty('sat','visibility',$('sat').checked?'visible':'none');
+async function load(){cityId=$('city').value;const b=`data/${cityId}/`,plan=await J(b+'plan.geojson'),al=await J(b+'alerts.geojson');meta=await J(b+'meta.json');
+A=al.features;$('legend').innerHTML=Object.entries(LU).map(([k,v])=>`<div><span style="display:inline-block;width:12px;height:12px;background:${v.color}"></span> ${v.am} / ${v.en}${v.class=='buildable'?'':' (no-build)'}</div>`).join('');$('title').textContent=meta.name;$('demo').hidden=!meta.demo;rev=JSON.parse(localStorage.getItem('rev:'+cityId)||'{}');
+for(const id of ['plan','alerts'])if(map.getSource(id)){map.removeLayer(id+'-f');map.removeLayer(id+'-l');map.removeSource(id)}
+map.addSource('plan',{type:'geojson',data:plan});map.addSource('alerts',{type:'geojson',data:al});
+map.addLayer({id:'plan-f',type:'fill',source:'plan',paint:{'fill-opacity':.3,'fill-color':['match',['get','land_use'],...Object.entries(LU).flatMap(([k,v])=>[k,v.color]),'#999']}});
+map.addLayer({id:'plan-l',type:'line',source:'plan',paint:{'line-color':'#333','line-width':.5}});
+map.addLayer({id:'alerts-f',type:'fill',source:'alerts',paint:{'fill-color':['match',['get','confidence'],'medium','#e0301e','#f0a020'],'fill-opacity':.8}});
+map.addLayer({id:'alerts-l',type:'line',source:'alerts',paint:{'line-color':'#000','line-width':1.5}});
+if(!bound++)map.on('click','alerts-f',e=>show(e.features[0].properties.unit_id));
+const sl=$('slider');sl.min=0;sl.max=Math.round((Date.now()-new Date(meta.baseline_end))/DAY);sl.value=0;$('start').value=meta.baseline_end;apply()}
+function apply(){const s=$('start').value,t=$('type').value,f=['all',['>=',['get','detected_date'],s]];if(t)f.push(['==',['get','alert_type'],t]);
+map.setFilter('alerts-f',f);map.setFilter('alerts-l',f);
+const L=A.filter(a=>a.properties.detected_date>=s&&(!t||a.properties.alert_type==t)).sort((x,y)=>y.properties.detected_date.localeCompare(x.properties.detected_date));
+$('sum').innerHTML=`<b>${L.length}</b> alerts since ${s} · ${L.reduce((q,a)=>q+a.properties.area_ha,0).toFixed(2)} ha`;
+$('list').innerHTML=L.map(a=>{const p=a.properties;return `<div class=it data-id="${p.unit_id}">${p.detected_date} · ${lab(p.land_use)} · ${p.confidence} · ${rev[p.unit_id]||'?'}</div>`}).join('');
+document.querySelectorAll('.it').forEach(e=>e.onclick=()=>show(e.dataset.id,1))}
+$('start').onchange=()=>{$('slider').value=Math.round((new Date($('start').value)-new Date(meta.baseline_end))/DAY);apply()};
+$('slider').oninput=()=>{$('start').value=addD(meta.baseline_end,+$('slider').value);apply()};
+$('type').onchange=apply;
+document.querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{const n=+b.dataset.d;$('start').value=n?addD(iso(new Date()),-n):meta.baseline_end;$('start').onchange()});
+function show(id,fly){const a=A.find(x=>x.properties.unit_id==id),p=a.properties;
+if(fly){const c=a.geometry.type=='Polygon'?a.geometry.coordinates[0][0]:a.geometry.coordinates[0][0][0];map.flyTo({center:c,zoom:18})}
+$('detail').innerHTML=`<hr><b>${lab(p.land_use)}</b> (${p.zone_class}) · ${p.alert_type}<br>Detected ${p.detected_date} · ${p.direction} · z=${p.z} · ${p.area_ha} ha<br><canvas id=cv width=310 height=130></canvas><br>Review: <select id=rv><option value="">?</option><option>confirmed</option><option>false alarm</option></select>`;
+$('rv').value=rev[id]||'';$('rv').onchange=()=>{rev[id]=$('rv').value;localStorage.setItem('rev:'+cityId,JSON.stringify(rev));apply()};chart(p)}
+function chart(p){const c=$('cv').getContext('2d'),W=310,H=130,all=[...p.vv,...p.vh],mn=Math.min(...all),mx=Math.max(...all),n=p.dates.length-1;
+const X=i=>i/n*W,Y=v=>H-(v-mn)/(mx-mn)*(H-14)-5;
+[[p.vv,'#d33'],[p.vh,'#36c']].forEach(([s,col])=>{c.beginPath();c.strokeStyle=col;s.forEach((v,i)=>i?c.lineTo(X(i),Y(v)):c.moveTo(X(i),Y(v)));c.stroke()});
+const k=p.dates.indexOf(p.detected_date);c.strokeStyle='#000';c.setLineDash([4,3]);c.beginPath();c.moveTo(X(k),0);c.lineTo(X(k),H);c.stroke();c.setLineDash([]);c.fillText('VV (red) · VH (blue) dB · dashed = detection',4,10)}
+$('exp').onclick=()=>{const r='unit_id,review\n'+Object.entries(rev).map(e=>e.join(',')).join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([r],{type:'text/csv'}));a.download=`reviews_${cityId}.csv`;a.click()};
+</script></html>
