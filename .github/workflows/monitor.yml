@@ -1,0 +1,42 @@
+name: Monitor cities
+on:
+  workflow_dispatch:
+  schedule: [{cron: '0 4 * * 1'}]          # every Monday
+  push: {paths: ['cities/**', 'src/**', 'docs/landuse.json']}   # runs when a plan is added/changed
+permissions: {contents: write}
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    outputs: {cities: '${{ steps.l.outputs.cities }}'}
+    steps:
+      - uses: actions/checkout@v4
+      - id: l
+        run: echo "cities=$(ls cities | grep -v '^_' | jq -R . | jq -sc .)" >> $GITHUB_OUTPUT
+  monitor:
+    needs: list
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: {city: '${{ fromJson(needs.list.outputs.cities) }}'}   # every folder in cities/ (not starting with _)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - run: pip install earthengine-api numpy
+      - run: python src/monitor.py cities/${{ matrix.city }}
+        env: {GEE_JSON_KEY: '${{ secrets.DAHA_REPO_SEC }}'}
+      - uses: actions/upload-artifact@v4
+        with: {name: 'data-${{ matrix.city }}', path: 'docs/data/${{ matrix.city }}'}
+  publish:
+    needs: monitor
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {path: tmp, pattern: 'data-*'}
+      - run: |
+          mkdir -p docs/data
+          for d in tmp/data-*; do c=${d#tmp/data-}; rm -rf docs/data/$c; mv $d docs/data/$c; done
+          python src/monitor.py --index
+          git config user.name github-actions; git config user.email actions@github.com
+          git add docs/data; git diff --cached --quiet || (git commit -m "Update monitoring data" && git push)
