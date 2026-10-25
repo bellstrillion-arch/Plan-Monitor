@@ -5,7 +5,7 @@ from datetime import date, timedelta
 
 DEFAULTS = dict(gee_project=os.environ.get('GEE_PROJECT', 'dahanga'), baseline_start='2025-01-01', baseline_end='2025-12-31',
                 erode_m=10, outside_buffer_m=150, max_unit_ha=1.0, cell_m=50, min_unit_m2=200, min_reliable_ha=0.05,
-                z_threshold=3.0, persistence=3, min_sigma_db=0.6)
+                z_threshold=3.0, persistence=3, min_sigma_db=0.7)
 LU = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'docs', 'landuse.json'), encoding='utf8'))
 
 def bbox(g):
@@ -117,22 +117,33 @@ def fake(cfg, plan):
                         area_ha=p['area_ha'], dates=[str(d) for d in days], vv=vv, vh=vh))
     return out
 
-def detect(u, cfg):
+def detect(u, cfg, ref):
+    """Change vs the unit's own SAME-SEASON baseline, after removing what ALL units share on each date (weather, soil moisture, acquisition effects)."""
     import numpy as np
-    d = np.array(u['dates'], dtype='datetime64[D]'); b0, b1 = np.datetime64(cfg['baseline_start']), np.datetime64(cfg['baseline_end'])
-    base = (d >= b0) & (d <= b1)
+    d = np.array(u['dates'], dtype='datetime64[D]'); b1 = np.datetime64(cfg['baseline_end'])
+    base = (d >= np.datetime64(cfg['baseline_start'])) & (d <= b1)
     if base.sum() < 8: return None
-    z = []
-    for x in (u['vv'], u['vh']):                      # robust z-score vs the unit's own baseline period
-        x = np.asarray(x, float); m = np.median(x[base])
-        z.append((x - m) / max(1.4826 * np.median(np.abs(x[base] - m)), cfg['min_sigma_db']))
-    zc = (z[0] + z[1]) / 2
-    hit = (np.abs(zc) >= cfg['z_threshold']) & (d > b1); run = 0
-    for i in range(len(d)):
-        run = run + 1 if hit[i] and (run == 0 or np.sign(zc[i]) == np.sign(zc[i-1])) else (1 if hit[i] else 0)
-        if run >= cfg['persistence']:                 # persistent change, not a one-off
-            j = i - run + 1
-            return dict(detected_date=str(d[j]), direction='increase' if zc[j] > 0 else 'decrease', z=round(float(zc[j:i+1].mean()), 1))
+    r = np.array([[u['vv'][i] - ref[t][0], u['vh'][i] - ref[t][1]] for i, t in enumerate(u['dates'])])
+    doy = (d - d.astype('datetime64[Y]').astype('datetime64[D]')).astype(int); zs = []
+    for c in (0, 1):
+        x = r[:, c]; xb = x[base]; dd = np.diff(xb)
+        sg = max(1.4826 * np.median(np.abs(dd - np.median(dd))) / 1.414, cfg['min_sigma_db'])   # short-term noise
+        z = np.full(len(d), np.nan)
+        for i in np.where(d > b1)[0]:
+            gap = np.abs(doy[base] - doy[i]); gap = np.minimum(gap, 365 - gap)
+            near = xb[gap <= 21]                                                               # same time of year, baseline year
+            if len(near) >= 2: z[i] = (x[i] - np.median(near)) / sg
+        zs.append(z)
+    zc = (zs[0] + zs[1]) / 2; thr = cfg['z_threshold']; k = cfg['persistence']; run = 0
+    with np.errstate(invalid='ignore'):
+        hit = (np.abs(zc) >= thr) & (d > b1)
+        for i in range(len(d)):
+            run = run + 1 if hit[i] and (run == 0 or np.sign(zc[i]) == np.sign(zc[i-1])) else (1 if hit[i] else 0)
+            if run >= k:
+                j = i - run + 1; tail = zc[-k:]
+                if np.all(np.sign(tail) == np.sign(zc[j])) and abs(np.mean(tail)) >= thr / 2:   # change must still be present now
+                    return dict(detected_date=str(d[j]), direction='increase' if zc[j] > 0 else 'decrease', z=round(float(np.mean(zc[j:i+1])), 1))
+                run = 0
     return None
 
 def write_index():
@@ -144,9 +155,14 @@ def main(cdir, demo):
     if os.path.exists(f'{cdir}/config.json'): cfg.update(json.load(open(f'{cdir}/config.json', encoding='utf8')))   # optional overrides
     plan = load_plan(f'{cdir}/plan.geojson')
     units = fake(cfg, plan) if demo else fetch_gee(cfg, plan)
+    import numpy as np
+    acc = {}
+    for u in units:
+        for t, a_, b_ in zip(u['dates'], u['vv'], u['vh']): acc.setdefault(t, []).append((a_, b_))
+    ref = {t: (float(np.median([x[0] for x in v])), float(np.median([x[1] for x in v]))) for t, v in acc.items()}
     alerts = []
     for u in units:
-        r = detect(u, cfg)
+        r = detect(u, cfg, ref)
         if not r: continue
         props = {**u['props'], **r, 'unit_id': u['unit_id'], 'area_ha': round(u['area_ha'], 3),
                  'confidence': 'low' if u['area_ha'] < cfg['min_reliable_ha'] or r['direction'] == 'decrease' else 'medium',
