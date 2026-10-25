@@ -53,12 +53,16 @@ def load_key():
     """Service-account key from secret DAHA_REPO_SEC: raw JSON or base64 of it."""
     raw = (os.environ.get('GEE_JSON_KEY') or '').strip()
     if not raw: sys.exit('ERROR: secret DAHA_REPO_SEC is missing or empty in this repository / ሚስጥሩ በዚህ repo ውስጥ የለም ወይም ባዶ ነው (Settings > Secrets and variables > Actions)')
-    try: return json.loads(raw if raw.startswith('{') else base64.b64decode(raw))
-    except Exception: sys.exit('ERROR: secret is not a service-account JSON key (raw or base64) / ሚስጥሩ ትክክለኛ የservice-account JSON ቁልፍ አይደለም')
+    try: k = json.loads(raw if raw.startswith('{') else base64.b64decode(raw))
+    except Exception as e: sys.exit(f'ERROR: secret is not a valid service-account JSON key (length {len(raw)}, starts with "{{": {raw.startswith("{")}): {type(e).__name__}: {e}')
+    if not isinstance(k, dict) or not k.get('client_email') or not k.get('private_key'):
+        sys.exit('ERROR: key JSON must contain "client_email" and "private_key" (use the full key file downloaded from Google Cloud)')
+    return k
 
 def fetch_gee(cfg, plan):
     import ee
     k = load_key()
+    print('service account:', k['client_email'], '| project:', cfg['gee_project'])   # not secret; helps debugging permissions
     ee.Initialize(ee.ServiceAccountCredentials(k['client_email'], key_data=json.dumps(k)), project=cfg['gee_project'])
     units = []
     for f in plan['features']:
