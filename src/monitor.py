@@ -84,7 +84,7 @@ def fetch_gee(cfg, plan):
           .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH')))
     h = s1.aggregate_histogram('relativeOrbitNumber_start').getInfo()
     print('latest S1 image used:', ee.Date(s1.aggregate_max('system:time_start')).format('YYYY-MM-dd').getInfo())
-    s1 = s1.filter(ee.Filter.eq('relativeOrbitNumber_start', int(max(h, key=h.get)))).sort('system:time_start')  # one track only
+    s1 = s1.filter(ee.Filter.eq('relativeOrbitNumber_start', int(float(max(h, key=h.get))))).sort('system:time_start')  # one track only
     lin = lambda im: ee.Image(10).pow(im.select(['VV', 'VH']).divide(10)).set('system:index', im.get('system:index'))
     stack = s1.map(lin).toBands(); out = []
     for i in range(0, len(units), 200):
