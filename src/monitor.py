@@ -49,9 +49,16 @@ def cells(ee, geom, box, cell_m, props):
                        {**props, 'unit_id': f"{props['plot_id']}-{i}-{j}"})
             for i in range(int((x1 - x0) / dx) + 1) for j in range(int((y1 - y0) / dy) + 1)]
 
+def load_key():
+    """Service-account key from secret DAHA_REPO_SEC: raw JSON or base64 of it."""
+    raw = (os.environ.get('GEE_JSON_KEY') or '').strip()
+    if not raw: sys.exit('ERROR: secret DAHA_REPO_SEC is missing or empty in this repository / ሚስጥሩ በዚህ repo ውስጥ የለም ወይም ባዶ ነው (Settings > Secrets and variables > Actions)')
+    try: return json.loads(raw if raw.startswith('{') else base64.b64decode(raw))
+    except Exception: sys.exit('ERROR: secret is not a service-account JSON key (raw or base64) / ሚስጥሩ ትክክለኛ የservice-account JSON ቁልፍ አይደለም')
+
 def fetch_gee(cfg, plan):
     import ee
-    k = json.loads(base64.b64decode(os.environ['GEE_JSON_KEY']))
+    k = load_key()
     ee.Initialize(ee.ServiceAccountCredentials(k['client_email'], key_data=json.dumps(k)), project=cfg['gee_project'])
     units = []
     for f in plan['features']:
