@@ -175,6 +175,9 @@ def main(cdir, demo):
     json.dump({'name': cfg['name'], 'demo': demo, 'generated': str(date.today()), 'baseline_end': cfg['baseline_end'],
                'units': len(units), 'alerts': len(alerts)}, open(f'{out}/meta.json', 'w'), ensure_ascii=False)
     write_index(); print(len(units), 'units,', len(alerts), 'alerts')
+    try:
+        import evaluate; evaluate.run(cdir, out)       # only if cities/<city>/ground_truth.csv exists
+    except Exception as e: print('accuracy evaluation skipped:', e)
 
 if __name__ == '__main__':
     write_index() if '--index' in sys.argv else main(sys.argv[1], '--demo' in sys.argv)
