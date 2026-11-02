@@ -1,0 +1,8 @@
+# Ground truth for accuracy evaluation. Copy to cities/<city>/ground_truth.csv. One row per place. Lines starting with # are ignored.
+# label: new_construction | no_change | non_construction_change (crop growth, vegetation clearing, parked vehicles, market stalls ...)
+# event_month = YYYY-MM when construction STARTED (new_construction only; leave empty otherwise). source: field | drone | vhr_image | local_knowledge
+# EXAMPLE rows (fake coordinates - delete them):
+# GT001,10.3800,37.7400,new_construction,2026-05,field,high,Observer A,foundation seen on a visit
+# GT002,10.3810,37.7410,no_change,,field,high,Observer A,empty plot
+# GT003,10.3820,37.7420,non_construction_change,,field,medium,Observer B,maize growing
+id,lat,lon,label,event_month,source,confidence,observer,notes
