@@ -11,7 +11,7 @@ label{display:block;margin:6px 0}.it{padding:4px;border-bottom:1px solid #eee;cu
 <div><button data-d="30">30d</button><button data-d="90">90d</button><button data-d="180">180d</button><button data-d="365">1y</button><button data-d="0">All</button></div>
 <label>Type <select id="type"><option value="">All</option><option>violation_candidate</option><option>activity</option></select></label>
 <label><input type="checkbox" id="sat" checked> Satellite basemap</label>
-<div id="legend" style="font-size:12px"></div><div id="sum"></div><div id="detail"></div><div id="list"></div><button id="exp">Export reviews (CSV)</button></div><div id="map"></div>
+<div id="legend" style="font-size:12px"></div><div id="acc" style="font-size:12px;margin:6px 0"></div><div id="sum"></div><div id="detail"></div><div id="list"></div><button id="exp">Export reviews (CSV)</button></div><div id="map"></div>
 <script>
 const $=id=>document.getElementById(id),DAY=864e5;let A=[],meta,cityId,map,rev={},bound=0,LU={};const lab=k=>LU[k]?LU[k].am+' / '+LU[k].en:k;
 const J=async u=>(await fetch(u)).json(),iso=d=>d.toISOString().slice(0,10),addD=(s,n)=>iso(new Date(+new Date(s)+n*DAY));
@@ -22,7 +22,7 @@ sat:{type:'raster',tiles:['https://server.arcgisonline.com/ArcGIS/rest/services/
 layers:[{id:'osm',type:'raster',source:'osm'},{id:'sat',type:'raster',source:'sat'}]}});map.on('load',load)})();
 $('sat').onchange=()=>map.setLayoutProperty('sat','visibility',$('sat').checked?'visible':'none');
 async function load(){cityId=$('city').value;const b=`data/${cityId}/`,plan=await J(b+'plan.geojson'),al=await J(b+'alerts.geojson');meta=await J(b+'meta.json');
-A=al.features;$('legend').innerHTML=Object.entries(LU).map(([k,v])=>`<div><span style="display:inline-block;width:12px;height:12px;background:${v.color}"></span> ${v.am} / ${v.en}${v.class=='buildable'?'':' (no-build)'}</div>`).join('');$('title').textContent=meta.name;$('demo').hidden=!meta.demo;rev=JSON.parse(localStorage.getItem('rev:'+cityId)||'{}');
+A=al.features;$('acc').textContent='';fetch(b+'accuracy.json').then(r=>r.ok?r.json():null).then(x=>{if(x&&(x.n_pos||x.n_neg))$('acc').innerHTML=`<b>ትክክለኛነት / Accuracy</b>${x.demo?' (DEMO)':''}: recall ${x.recall_any?x.recall_any[0]+'%':'–'} (n=${x.n_pos}) · false alarms ${x.false_alarm?x.false_alarm[0]+'%':'–'} (n=${x.n_neg})`}).catch(()=>{});$('legend').innerHTML=Object.entries(LU).map(([k,v])=>`<div><span style="display:inline-block;width:12px;height:12px;background:${v.color}"></span> ${v.am} / ${v.en}${v.class=='buildable'?'':' (no-build)'}</div>`).join('');$('title').textContent=meta.name;$('demo').hidden=!meta.demo;rev=JSON.parse(localStorage.getItem('rev:'+cityId)||'{}');
 for(const id of ['plan','alerts'])if(map.getSource(id)){map.removeLayer(id+'-f');map.removeLayer(id+'-l');map.removeSource(id)}
 map.addSource('plan',{type:'geojson',data:plan});map.addSource('alerts',{type:'geojson',data:al});
 map.addLayer({id:'plan-f',type:'fill',source:'plan',paint:{'fill-opacity':.3,'fill-color':['match',['get','land_use'],...Object.entries(LU).flatMap(([k,v])=>[k,v.color]),'#999']}});
